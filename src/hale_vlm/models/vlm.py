@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-from hale_core.registry import register_model
+from hale_vlm.registry import register_model
 
 from hale_vlm.config.run import VLMRunConfig
 from hale_vlm.llm.adapters import iter_trainable_parameters
@@ -17,6 +17,8 @@ VLM_VARIANTS = ("qwen3_8b_vlm", "deepseek_r1_qwen_7b_vlm")
 
 class HaleVLM(nn.Module):
     """Vision encoder + projector + dense LLM backbone."""
+
+    fusion_mode = "token_replace"
 
     def __init__(self, vocab_size: int, cfg: VLMRunConfig | None = None, **kwargs) -> None:
         super().__init__()
@@ -35,6 +37,10 @@ class HaleVLM(nn.Module):
         )
         self.image_token_id = self._resolve_image_token_id(llm_cfg.image_token)
         self._log_trainable_summary()
+
+    @property
+    def num_image_tokens(self) -> int:
+        return self.cfg.model.vision.num_image_tokens
 
     def trainable_parameters(self):
         """Parameters updated during fine-tuning: projector, optional vision, LoRA adapters."""
@@ -171,7 +177,12 @@ class HaleVLM(nn.Module):
 
 
 def build_vlm(cfg: VLMRunConfig) -> HaleVLM:
-    return HaleVLM.from_config(cfg)
+    architecture = cfg.model.resolved_architecture(cfg.variant)
+    if architecture == "hale":
+        return HaleVLM.from_config(cfg)
+    from hale_vlm.models.scratch.factory import build_scratch_vlm
+
+    return build_scratch_vlm(cfg)
 
 
 def _register_vlm_variants() -> None:

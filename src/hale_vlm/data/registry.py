@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TypeVar
 
-from hale_core.registry.base import NamedRegistry
+from hale_vlm.registry.base import NamedRegistry
 
 from hale_vlm.data.adapters.base import VLMDataAdapter
 from hale_vlm.data.types import TrainingStage

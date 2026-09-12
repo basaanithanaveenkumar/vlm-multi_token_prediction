@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from hale_core.nn import optim as optim_module
-from hale_core.registry import register_trainer
-from hale_core.training.trainer import Trainer
+from hale_vlm.utils import optim as optim_module
+from hale_vlm.registry import register_trainer
+from hale_vlm.training.base import Trainer
 
 
 @register_trainer("vlm")

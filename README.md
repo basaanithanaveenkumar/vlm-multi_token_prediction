@@ -1,49 +1,58 @@
-# Halo-VLM
+# Hale-VLM
 
-Unified vision-language platform:
-
-1. **Halo-VLM** — custom ViT + MoE decoder, COCO captioning, multi-token prediction research
-2. **Hale-VLM** — Qwen3 / DeepSeek-R1 + SigLIP via HaleBlocks, LoRA fine-tuning, SmolVLM/VLA dataset registries
+Production-quality vision-language modeling library: Hale (HF SigLIP + Qwen/DeepSeek) and scratch (ViT + MoE) stacks, with SmolVLM/VLA data registries.
 
 ![Halo VLM](assets/halo_RB.png)
-
-```text
-src/
-├── halo_vlm/    # Halo scratch models (BasicVLM, HaloVLM)
-└── hale_vlm/    # HaleBlocks HF VLM stack
-configs/         # Hale-VLM YAML configs
-tests/
-```
 
 ## Install
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --extra test
 ```
 
-For Halo COCO training (Linux recommended — LAVIS/decord):
+Scratch/COCO training (optional):
 
 ```bash
-uv sync --extra dev --extra halo
+uv sync --extra dev --extra scratch --extra viz
 ```
 
-HaleBlocks is pulled from git automatically (`pyproject.toml`).
+## Library usage
 
-## Halo-VLM (scratch path)
+```python
+from hale_vlm import load_config, build_vlm
 
-```bash
-PYTHONPATH=src uv run python -m halo_vlm.train
-PYTHONPATH=src uv run python -m halo_vlm.inference --help
+cfg = load_config("configs/base.yaml")
+model = build_vlm(cfg)
 ```
 
-## Hale-VLM (HF path)
+## CLI
 
 ```bash
 uv run hale-vlm-train configs/qwen3_8b_overfit.yaml
 uv run hale-vlm-chat configs/base.yaml --image path/to/image.jpg
+
+# Scratch overfit smoke test
+uv run hale-vlm-train configs/halo_moe_overfit.yaml
 ```
 
-See `configs/` for SmolVLM, SmolVLA, and robotics+VLM presets.
+## Package layout
+
+```text
+src/hale_vlm/
+├── core/          # base config + protocols
+├── registry/      # plugin registration
+├── config/        # VLM YAML schemas
+├── data/          # datasets + registries
+├── models/        # Hale + scratch VLMs
+├── training/      # trainers + losses
+├── inference/     # chat/decode
+├── cli/           # entry points
+└── utils/         # optim, logging, runtime
+configs/           # YAML run configs
+examples/          # import-first usage
+tests/             # unit + integration
+docs/              # mkdocs
+```
 
 ## Develop
 
@@ -52,6 +61,8 @@ pre-commit install
 uv run pytest tests/ -q
 uv run ruff check src tests
 ```
+
+See [docs/architecture.md](docs/vlm_architecture.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -1,7 +1,6 @@
 from torch import nn
 import torch
-from halo_vlm.models.transformer import (
-    DecoderTransformer,
+from hale_vlm.models.scratch.components.transformer import (
     HeadAttn,
     MultiHeadAttn,
     SelfAttn,

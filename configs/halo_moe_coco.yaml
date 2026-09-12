@@ -1,0 +1,25 @@
+variant: halo_vlm_moe
+model:
+  architecture: halo_moe
+  max_length: 32
+  vision:
+    image_size: 224
+  scratch:
+    embed_dim: 512
+    vocab_size: 30522
+    tokenizer_id: bert-base-uncased
+    coco_max_length: 17
+train:
+  backend: scratch
+  batch_size: 8
+  lr: 3.0e-4
+  max_epochs: 10
+  log_tensorboard: true
+  log_dir: ./runs/halo_moe_coco
+data:
+  source: coco_lavis
+logging:
+  backend: noop
+experiment:
+  enabled: false
+device: cpu

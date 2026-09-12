@@ -60,21 +60,28 @@ class VLMInference:
         ])
     
     def _load_model(self, model_path: str):
-        """Load model from checkpoint"""
-        from halo_vlm.models.vlm import BasicVLM
-        
-        # Load checkpoint
-        checkpoint = torch.load(model_path, map_location=self.device)
-        
-        # Reconstruct model
-        config = checkpoint.get('model_config', {})
-        model = BasicVLM(
-            vocab_size=config.get('vocab_size', 30522),
-            embed_dim=config.get('embed_dim', 512)
-        )
+        """Load model from checkpoint."""
+        checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+        config = checkpoint.get("model_config", {})
+        architecture = config.get("architecture", "basic")
+
+        if architecture == "halo_moe":
+            from hale_vlm.models.scratch.halo_vlm import HaloVLM
+
+            model = HaloVLM(
+                vocab_size=config.get("vocab_size", 30522),
+                emb_dim=config.get("embed_dim", 512),
+            )
+        else:
+            from hale_vlm.models.scratch.basic_vlm import BasicVLM
+
+            model = BasicVLM(
+                vocab_size=config.get("vocab_size", 30522),
+                embed_dim=config.get("embed_dim", 512),
+            )
         
         # Load weights
-        model.load_state_dict(checkpoint['model_state_dict'])
+        model.load_state_dict(checkpoint["model_state_dict"])
         model = model.to(self.device)
         
         print(f"✓ Loaded model from {model_path}")

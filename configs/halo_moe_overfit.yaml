@@ -1,0 +1,25 @@
+variant: halo_moe_overfit
+model:
+  architecture: halo_moe
+  max_length: 24
+  vision:
+    image_size: 224
+  scratch:
+    embed_dim: 512
+    vocab_size: 30522
+    tokenizer_id: bert-base-uncased
+train:
+  backend: scratch
+  batch_size: 2
+  lr: 3.0e-4
+  max_epochs: 1
+  log_tensorboard: false
+data:
+  source: overfit
+  overfit_text: "A robot arm picking up a red block."
+  n_overfit_copies: 8
+logging:
+  backend: noop
+experiment:
+  enabled: false
+device: cpu

@@ -4,16 +4,21 @@ from __future__ import annotations
 
 from typing import Literal
 
-from hale_core.config.sections.data import DataConfig
+from hale_vlm.core.config.sections.data import DataConfig
 from pydantic import Field
 
 from hale_vlm.data.types import RoboticsVLMMode
 
 
 class VLMDataConfig(DataConfig):
-    source: Literal["huggingface", "overfit", "registry", "vla_registry", "mixed_registry"] = (
-        "huggingface"
-    )
+    source: Literal[
+        "huggingface",
+        "overfit",
+        "registry",
+        "vla_registry",
+        "mixed_registry",
+        "coco_lavis",
+    ] = "huggingface"
     registry_stage: Literal["all", "vision", "video", "context"] = "all"
     registry_datasets: list[str] = Field(default_factory=list)
     # SmolVLA robotics registry (can also feed VLM training via robotics_vlm_mode)

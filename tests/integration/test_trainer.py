@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from hale_core.registry import get_trainer
+from hale_vlm.registry import get_trainer
 
 from hale_vlm.config import load_vlm_config
 from hale_vlm.data.multimodal import MultimodalDataModule

@@ -10,6 +10,7 @@ from PIL import Image
 from torchvision import transforms
 
 from hale_vlm.config import load_vlm_config
+from hale_vlm.inference.scratch import VLMInference
 from hale_vlm.models.vlm import build_vlm
 
 
@@ -25,17 +26,7 @@ def _load_image(path: Path, image_size: int) -> torch.Tensor:
     return transform(image).unsqueeze(0)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Chat with a Hale-VLM model")
-    parser.add_argument("config", type=Path, help="Path to YAML config")
-    parser.add_argument("--image", type=Path, required=True, help="Input image path")
-    parser.add_argument("--prompt", type=str, default="Describe the image in detail.")
-    parser.add_argument("--max-new-tokens", type=int, default=256)
-    args = parser.parse_args()
-
-    cfg = load_vlm_config(str(args.config))
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+def _chat_hale(cfg, args, device) -> None:
     model = build_vlm(cfg).to(device)
     model.eval()
 
@@ -64,6 +55,56 @@ def main() -> None:
         )
 
     print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+
+
+def _chat_scratch(cfg, args, device) -> None:
+    from transformers import AutoTokenizer
+
+    if args.checkpoint is None:
+        raise ValueError("Scratch chat requires --checkpoint pointing to a .pt file")
+
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model.scratch.tokenizer_id)
+    engine = VLMInference(
+        model_path=str(args.checkpoint),
+        device=str(device),
+        tokenizer=tokenizer,
+        max_length=cfg.model.max_length,
+    )
+    image = engine.load_image(str(args.image))
+    prompt = args.prompt or "Describe the image"
+    init_tokens = engine.prepare_initial_tokens(f"Describe the image{prompt}")
+    generated_ids, decoded = engine.generate_greedy(
+        image,
+        init_tokens,
+        max_new_tokens=args.max_new_tokens,
+        eos_token_id=getattr(tokenizer, "eos_token_id", None),
+    )
+    del generated_ids
+    print(decoded[0] if decoded else "")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Chat with a VLM model")
+    parser.add_argument("config", type=Path, help="Path to YAML config")
+    parser.add_argument("--image", type=Path, required=True, help="Input image path")
+    parser.add_argument("--prompt", type=str, default="Describe the image in detail.")
+    parser.add_argument("--max-new-tokens", type=int, default=256)
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="Scratch checkpoint (.pt). Required for basic/halo_moe architectures.",
+    )
+    args = parser.parse_args()
+
+    cfg = load_vlm_config(str(args.config))
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    architecture = cfg.model.resolved_architecture(cfg.variant)
+    if architecture == "hale":
+        _chat_hale(cfg, args, device)
+    else:
+        _chat_scratch(cfg, args, device)
 
 
 if __name__ == "__main__":

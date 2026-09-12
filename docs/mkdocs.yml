@@ -1,0 +1,7 @@
+site_name: Hale-VLM
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Getting Started: getting-started.md

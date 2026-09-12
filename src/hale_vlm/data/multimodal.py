@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 import torch
 from datasets import load_dataset
@@ -15,6 +16,12 @@ from transformers import AutoTokenizer
 
 from hale_vlm.config.run import VLMRunConfig
 from hale_vlm.data.registry_stream import iter_registry_vlm_samples
+from hale_vlm.data.scratch_batch import scratch_collate
+from hale_vlm.data.scratch_encoding import (
+    encode_scratch_image,
+    encode_scratch_text,
+    scratch_image_transform,
+)
 from hale_vlm.data.types import Modality, VLMSample
 from hale_vlm.llm.backbones import resolve_llm_config
 
@@ -29,8 +36,25 @@ class MultimodalSample:
     dataset: str
 
 
+FusionMode = Literal["token_replace", "prefix_concat"]
+
+
+def _hale_collate(samples: list[MultimodalSample]) -> dict[str, torch.Tensor | list[str]]:
+    pixel_values = torch.stack(
+        [s.pixel_values if s.pixel_values.ndim == 3 else s.pixel_values[0] for s in samples]
+    )
+    return {
+        "pixel_values": pixel_values,
+        "input_ids": torch.stack([s.input_ids for s in samples]),
+        "attention_mask": torch.stack([s.attention_mask for s in samples]),
+        "labels": torch.stack([s.labels for s in samples]),
+        "modality": [s.modality for s in samples],
+        "dataset": [s.dataset for s in samples],
+    }
+
+
 class MultimodalDataset(Dataset):
-    """Image + caption pairs with prompt templating."""
+    """Image + caption pairs with Hale or scratch prompt templating."""
 
     def __init__(
         self,
@@ -40,18 +64,23 @@ class MultimodalDataset(Dataset):
         image_token: str,
         image_size: int,
         max_length: int,
+        fusion_mode: FusionMode = "token_replace",
     ) -> None:
         self.records = records
         self.tokenizer = tokenizer
         self.image_token = image_token
         self.max_length = max_length
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize((image_size, image_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            ]
-        )
+        self.fusion_mode = fusion_mode
+        if fusion_mode == "prefix_concat":
+            self.transform = scratch_image_transform(image_size)
+        else:
+            self.transform = transforms.Compose(
+                [
+                    transforms.Resize((image_size, image_size)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ]
+            )
 
     def __len__(self) -> int:
         return len(self.records)
@@ -59,23 +88,32 @@ class MultimodalDataset(Dataset):
     def __getitem__(self, idx: int) -> MultimodalSample:
         row = self.records[idx]
         image = row["image"]
-        if not isinstance(image, Image.Image):
-            image = Image.open(image).convert("RGB")
-        pixel_values = self.transform(image)
-
         caption = row["text"]
-        prompt = f"User: {self.image_token}\nDescribe the image.\nAssistant: {caption}"
-        encoded = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        input_ids = encoded["input_ids"].squeeze(0)
-        attention_mask = encoded["attention_mask"].squeeze(0)
-        labels = input_ids.clone()
-        labels[attention_mask == 0] = -100
+
+        if self.fusion_mode == "prefix_concat":
+            pixel_values = encode_scratch_image(image, self.transform)
+            input_ids, attention_mask, labels = encode_scratch_text(
+                self.tokenizer,
+                caption,
+                max_length=self.max_length,
+            )
+        else:
+            if not isinstance(image, Image.Image):
+                image = Image.open(image).convert("RGB")
+            pixel_values = self.transform(image)
+            prompt = f"User: {self.image_token}\nDescribe the image.\nAssistant: {caption}"
+            encoded = self.tokenizer(
+                prompt,
+                truncation=True,
+                max_length=self.max_length,
+                padding="max_length",
+                return_tensors="pt",
+            )
+            input_ids = encoded["input_ids"].squeeze(0)
+            attention_mask = encoded["attention_mask"].squeeze(0)
+            labels = input_ids.clone()
+            labels[attention_mask == 0] = -100
+
         return MultimodalSample(
             pixel_values=pixel_values,
             input_ids=input_ids,
@@ -89,8 +127,14 @@ class MultimodalDataset(Dataset):
 class EncodedRegistryDataset(Dataset):
     """Materialize a bounded slice from the sequential registry stream for map-style training."""
 
-    def __init__(self, cfg: VLMRunConfig, tokenizer) -> None:
-        self.samples = list(RegistryStreamingDataset(cfg, tokenizer))
+    def __init__(
+        self,
+        cfg: VLMRunConfig,
+        tokenizer,
+        *,
+        fusion_mode: FusionMode,
+    ) -> None:
+        self.samples = list(RegistryStreamingDataset(cfg, tokenizer, fusion_mode=fusion_mode))
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -102,19 +146,29 @@ class EncodedRegistryDataset(Dataset):
 class RegistryStreamingDataset(IterableDataset):
     """Stream all registered datasets sequentially with bounded sample counts."""
 
-    def __init__(self, cfg: VLMRunConfig, tokenizer) -> None:
+    def __init__(
+        self,
+        cfg: VLMRunConfig,
+        tokenizer,
+        *,
+        fusion_mode: FusionMode = "token_replace",
+    ) -> None:
         self.cfg = cfg
         self.tokenizer = tokenizer
+        self.fusion_mode = fusion_mode
         self.image_token = cfg.model.llm.image_token
         self.max_length = cfg.model.max_length
         self.image_size = cfg.model.vision.image_size
-        self.transform = transforms.Compose(
-            [
-                transforms.Resize((self.image_size, self.image_size)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            ]
-        )
+        if fusion_mode == "prefix_concat":
+            self.transform = scratch_image_transform(self.image_size)
+        else:
+            self.transform = transforms.Compose(
+                [
+                    transforms.Resize((self.image_size, self.image_size)),
+                    transforms.ToTensor(),
+                    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+                ]
+            )
 
     def __iter__(self) -> Iterator[MultimodalSample]:
         data_cfg = self.cfg.data
@@ -126,18 +180,30 @@ class RegistryStreamingDataset(IterableDataset):
 
     def _encode(self, sample: VLMSample) -> MultimodalSample:
         pixel_values = self._visual_tensor(sample)
-        prompt = self._build_prompt(sample)
-        encoded = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        input_ids = encoded["input_ids"].squeeze(0)
-        attention_mask = encoded["attention_mask"].squeeze(0)
-        labels = input_ids.clone()
-        labels[attention_mask == 0] = -100
+        if self.fusion_mode == "prefix_concat":
+            if sample.modality == Modality.TEXT:
+                text = sample.text
+            else:
+                text = sample.text or "Describe the image."
+            input_ids, attention_mask, labels = encode_scratch_text(
+                self.tokenizer,
+                text,
+                max_length=self.max_length,
+            )
+        else:
+            prompt = self._build_prompt(sample)
+            encoded = self.tokenizer(
+                prompt,
+                truncation=True,
+                max_length=self.max_length,
+                padding="max_length",
+                return_tensors="pt",
+            )
+            input_ids = encoded["input_ids"].squeeze(0)
+            attention_mask = encoded["attention_mask"].squeeze(0)
+            labels = input_ids.clone()
+            labels[attention_mask == 0] = -100
+
         return MultimodalSample(
             pixel_values=pixel_values,
             input_ids=input_ids,
@@ -161,43 +227,47 @@ class RegistryStreamingDataset(IterableDataset):
         frames = sample.visual_frames
         if not frames:
             return torch.zeros(3, self.image_size, self.image_size)
+        if self.fusion_mode == "prefix_concat":
+            return encode_scratch_image(frames[0], self.transform)
         tensors = [self.transform(frame) for frame in frames]
         if sample.modality == Modality.VIDEO and len(tensors) > 1:
             return torch.stack(tensors)
         return tensors[0]
 
 
-def _collate(samples: list[MultimodalSample]) -> dict[str, torch.Tensor | list[str]]:
-    pixel_values = torch.stack(
-        [s.pixel_values if s.pixel_values.ndim == 3 else s.pixel_values[0] for s in samples]
-    )
-    return {
-        "pixel_values": pixel_values,
-        "input_ids": torch.stack([s.input_ids for s in samples]),
-        "attention_mask": torch.stack([s.attention_mask for s in samples]),
-        "labels": torch.stack([s.labels for s in samples]),
-        "modality": [s.modality for s in samples],
-        "dataset": [s.dataset for s in samples],
-    }
-
-
 class MultimodalDataModule:
-    """HaleBlocks-compatible data module for VLM training."""
+    """HaleBlocks-compatible data module for Hale and scratch VLM training."""
 
     def __init__(self, cfg: VLMRunConfig, tokenizer=None) -> None:
         self.cfg = cfg
+        self.fusion_mode = self._resolve_fusion_mode()
         if tokenizer is None:
-            llm_cfg = resolve_llm_config(cfg.model.llm)
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                llm_cfg.model_id,
-                trust_remote_code=llm_cfg.trust_remote_code,
-            )
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer = self._build_tokenizer()
         else:
             self.tokenizer = tokenizer
         self._train: Dataset | IterableDataset | None = None
         self._val: Dataset | None = None
+        self._coco_loaders: dict[str, DataLoader] | None = None
+
+    def _resolve_fusion_mode(self) -> FusionMode:
+        architecture = self.cfg.model.resolved_architecture(self.cfg.variant)
+        return "prefix_concat" if architecture in {"basic", "halo_moe"} else "token_replace"
+
+    def _build_tokenizer(self):
+        if self.fusion_mode == "prefix_concat":
+            tokenizer = AutoTokenizer.from_pretrained(self.cfg.model.scratch.tokenizer_id)
+        else:
+            llm_cfg = resolve_llm_config(self.cfg.model.llm)
+            tokenizer = AutoTokenizer.from_pretrained(
+                llm_cfg.model_id,
+                trust_remote_code=llm_cfg.trust_remote_code,
+            )
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+
+    def _collate_fn(self):
+        return scratch_collate if self.fusion_mode == "prefix_concat" else _hale_collate
 
     def _load_split(self, split: str) -> list[dict[str, Any]]:
         data_cfg = self.cfg.data
@@ -228,10 +298,38 @@ class MultimodalDataModule:
                 break
         return records
 
+    def _build_coco_loaders(self) -> dict[str, DataLoader]:
+        if self._coco_loaders is not None:
+            return self._coco_loaders
+
+        from lavis.datasets.builders import load_dataset
+
+        from hale_vlm.data.coco_lavis import create_vlm_dataloaders
+
+        import os
+
+        os.environ.setdefault("cache_root", str(Path.home() / ".cache" / "lavis" / "coco"))
+        coco_dataset = load_dataset("coco_caption")
+        self._coco_loaders = create_vlm_dataloaders(
+            coco_dataset,
+            batch_size=self.cfg.train.batch_size,
+            num_workers=2,
+            tokenizer=self.tokenizer,
+            max_length=self.cfg.model.scratch.coco_max_length,
+        )
+        return self._coco_loaders
+
     def train_loader(self) -> DataLoader:
+        if self.cfg.data.source == "coco_lavis":
+            return self._build_coco_loaders()["train"]
+
         if self._train is None:
             if self.cfg.data.source in {"registry", "vla_registry", "mixed_registry"}:
-                self._train = EncodedRegistryDataset(self.cfg, self.tokenizer)
+                self._train = EncodedRegistryDataset(
+                    self.cfg,
+                    self.tokenizer,
+                    fusion_mode=self.fusion_mode,
+                )
             else:
                 records = self._load_split(self.cfg.data.train_split)
                 self._train = MultimodalDataset(
@@ -240,16 +338,20 @@ class MultimodalDataModule:
                     image_token=self.cfg.model.llm.image_token,
                     image_size=self.cfg.model.vision.image_size,
                     max_length=self.cfg.model.max_length,
+                    fusion_mode=self.fusion_mode,
                 )
         return DataLoader(
             self._train,
             batch_size=self.cfg.train.batch_size,
             shuffle=self.cfg.data.source not in {"registry", "vla_registry", "mixed_registry"},
-            collate_fn=_collate,
+            collate_fn=self._collate_fn(),
         )
 
     def val_loader(self, train_loader: DataLoader | None = None) -> DataLoader:
         del train_loader
+        if self.cfg.data.source == "coco_lavis":
+            return self._build_coco_loaders()["val"]
+
         if self._val is None:
             records = self._load_split(self.cfg.data.val_split)
             self._val = MultimodalDataset(
@@ -258,14 +360,17 @@ class MultimodalDataModule:
                 image_token=self.cfg.model.llm.image_token,
                 image_size=self.cfg.model.vision.image_size,
                 max_length=self.cfg.model.max_length,
+                fusion_mode=self.fusion_mode,
             )
         return DataLoader(
             self._val,
             batch_size=self.cfg.train.batch_size,
             shuffle=False,
-            collate_fn=_collate,
+            collate_fn=self._collate_fn(),
         )
 
     def viz_prompt(self, step: int) -> str:
         del step
+        if self.fusion_mode == "prefix_concat":
+            return "Describe the image."
         return f"User: {self.cfg.model.llm.image_token}\nDescribe the image.\nAssistant:"
