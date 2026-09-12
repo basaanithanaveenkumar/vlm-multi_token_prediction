@@ -1,11 +1,10 @@
-from models.vit import VisTransformer
-from models.transformer import DecoderTransformer
-from models.lm_head import LMHead
-from models.image_proj import ImageProjector
 import torch
 import torch.nn as nn
 
-from models.positional_embeddings import SinusoidalPositionalEmbedding
+from halo_vlm.models.image_proj import ImageProjector
+from halo_vlm.models.lm_head import LMHead
+from halo_vlm.models.transformer import DecoderTransformer
+from halo_vlm.models.vit import VisTransformer
 class HaloVLM(nn.Module):
     def __init__(self, vocab_size, emb_dim=512):
         super().__init__()

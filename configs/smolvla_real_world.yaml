@@ -1,0 +1,5 @@
+inherits: base.yaml
+data:
+  source: vla_registry
+  vla_registry_stage: real_world
+  max_samples_per_dataset: 50

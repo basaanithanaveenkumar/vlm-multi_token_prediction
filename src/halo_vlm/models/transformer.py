@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-from models.moe import DeepseekMoE
+from halo_vlm.models.moe import DeepseekMoE
 
 
 

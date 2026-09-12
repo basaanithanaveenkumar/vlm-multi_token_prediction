@@ -1,0 +1,38 @@
+variant: qwen3_8b_vlm
+model:
+  max_length: 512
+  vision:
+    encoder: siglip
+    model_id: google/siglip-base-patch16-224
+    freeze_encoder: true
+    num_image_tokens: 196
+  llm:
+    backbone: qwen3-8b
+    model_id: Qwen/Qwen3-8B
+    dtype: bfloat16
+    freeze_llm: true
+    use_lora: true
+    reasoning_mode: false
+train:
+  steps: 1000
+  batch_size: 2
+  lr: 2.0e-5
+  grad_clip: 1.0
+  resume: false
+  checkpoint_every_epoch: true
+data:
+  source: overfit
+  overfit_text: "A red square on a white background."
+  n_overfit_copies: 32
+  train_split: train
+  val_split: validation
+logging:
+  backend: noop
+  tensorboard: false
+experiment:
+  enabled: true
+  root: data/experiments
+eval:
+  every_n_epochs: 1
+viz:
+  enabled: false

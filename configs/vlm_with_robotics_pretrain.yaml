@@ -1,0 +1,6 @@
+inherits: smolvlm_all.yaml
+data:
+  source: mixed_registry
+  robotics_vlm_mode: pretraining
+  vla_registry_stage: real_world
+  max_samples_per_dataset: 64

@@ -1,112 +1,58 @@
-# Halo VLM - Multi-Token Prediction
+# Halo-VLM
+
+Unified vision-language platform:
+
+1. **Halo-VLM** — custom ViT + MoE decoder, COCO captioning, multi-token prediction research
+2. **Hale-VLM** — Qwen3 / DeepSeek-R1 + SigLIP via HaleBlocks, LoRA fine-tuning, SmolVLM/VLA dataset registries
 
 ![Halo VLM](assets/halo_RB.png)
 
-A PyTorch-based Vision-Language Model (VLM) implementation for Image Q&A with support for multi-token prediction. **Halo VLM** combines vision encoders with transformer-based language modeling to enable efficient image understanding and text generation.
-
-## Overview
-
-This project implements a **BasicVLM** model that:
-
-- 🖼️ Encodes images using OpenCLIP (ViT-B-32)
-- 🔗 Projects image features to language embedding space
-- 📝 Generates text through next-token prediction
-- 📊 Supports TensorBoard visualization with image predictions
-- ⚡ Optimized for GPU training (12GB+ VRAM recommended)
-
-## Features
-
-✅ **Core Architecture**
-
-- Vision transformer (frozen or fine-tuned)
-- Linear image projector with dimension alignment
-- Transformer decoder (with 24 layers, 8 attention heads — tweakable)
-- Causal masking for autoregressive generation
-- Sinusoidal positional embeddings
-
-✅ **Training Infrastructure**
-
-- Gradient clipping and learning rate scheduling (Cosine Annealing)
-- Comprehensive gradient monitoring and statistics
-
-✅ **Logging & Visualization**
-
-- TensorBoard integration for training metrics
-- Per-layer gradient and weight histograms
-- Ground truth vs. predicted token comparison with color-coded accuracy
-- Position-wise analysis for debugging predictions
-
-✅ **Data Handling**
-
-- COCO Caption dataset integration via LAVIS
-- Configurable batch size and sequence length
-- Proper next-token prediction target construction
-- Data validation for input/target alignment
-
-## Project Structure
-
-```
-vlm-multi_token_prediction/
-├── models/                          # Core model components
-│   ├── vlm.py                      # BasicVLM model definition
-│   ├── vision_encoder.py           # OpenCLIP encoder wrapper
-│   ├── image_proj.py               # Image-to-text projection
-│   ├── transformer.py              # Transformer blocks (attention, FFN)
-│   ├── positional_embeddings.py    # Sinusoidal PE implementation
-│   ├── lm_head.py                  # Language modeling head
-│   ├── open_clipencoder.py         # OpenCLIP wrapper
-│   └── CLIP.py                     # CLIP model utilities
-├── train.py                         # Main trainer class with TensorBoard logging
-├── dataloader.py                    # Data loading and preprocessing
-├── config/                          # Configuration files
-├── utils/                           # Utility functions
-├── docs/                            # Documentation
-└── README.md                        # This file
+```text
+src/
+├── halo_vlm/    # Halo scratch models (BasicVLM, HaloVLM)
+└── hale_vlm/    # HaleBlocks HF VLM stack
+configs/         # Hale-VLM YAML configs
+tests/
 ```
 
-## Installation
-
-### 1. Environment Setup with `uv`
+## Install
 
 ```bash
-# Install uv package manager (fast Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source ~/.bashrc  # or ~/.zshrc for macOS
-uv --version
+uv sync --extra dev
 ```
 
-### 2. Clone Repository & Install Dependencies
+For Halo COCO training (Linux recommended — LAVIS/decord):
 
 ```bash
-git clone <repository-url>
-cd vlm-multi_token_prediction
-
-# Install dependencies using uv
-uv sync
+uv sync --extra dev --extra halo
 ```
 
-### 3. Download COCO Dataset (Optional)
+HaleBlocks is pulled from git automatically (`pyproject.toml`).
+
+## Halo-VLM (scratch path)
 
 ```bash
-# Create cache directory
-mkdir -p ~/.cache/lavis/coco
-
-# Download COCO dataset and check by using below command
-python -c "from lavis.datasets.builders import load_dataset; \
-           dataset = load_dataset('coco_caption')"
+PYTHONPATH=src uv run python -m halo_vlm.train
+PYTHONPATH=src uv run python -m halo_vlm.inference --help
 ```
 
-### Data Loading Issues
+## Hale-VLM (HF path)
 
 ```bash
-# Set LAVIS cache directory
-export LAVIS_CACHE_DIR=/path/to/cache
+uv run hale-vlm-train configs/qwen3_8b_overfit.yaml
+uv run hale-vlm-chat configs/base.yaml --image path/to/image.jpg
 ```
 
-## Future Work
+See `configs/` for SmolVLM, SmolVLA, and robotics+VLM presets.
 
-- [ ] Fix minor bugs
-- [ ] Multi-token prediction with speculative decoding
-- [ ] Mixed precision training (FP16/BF16)
-- [ ] CLIP style pretraining (not part of this repo)
-- [ ] LLM style pretraining (not part of this repo)
+## Develop
+
+```bash
+pre-commit install
+uv run pytest tests/ -q
+uv run ruff check src tests
+```
+
+## License
+
+MIT

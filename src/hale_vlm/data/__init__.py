@@ -1,0 +1,86 @@
+"""Public data API — import submodules directly to avoid circular imports."""
+
+from hale_vlm.data.catalog import (
+    SMOLVLM_ALL_DATASETS,
+    SMOLVLM_CONTEXT_DATASETS,
+    SMOLVLM_REJECTED_DATASETS,
+    SMOLVLM_VIDEO_DATASETS,
+    SMOLVLM_VISION_DATASETS,
+    STAGE_PRESETS,
+    VIDEO_CATEGORY_NOTES,
+    VISION_CATEGORY_NOTES,
+)
+from hale_vlm.data.registry import (
+    DATASETS,
+    build_dataset,
+    get_dataset,
+    list_datasets,
+    register_dataset,
+)
+from hale_vlm.data.sequential import SequentialMixConfig, SequentialMultiDatasetStream
+from hale_vlm.data.types import (
+    DatasetSpec,
+    Modality,
+    RobotEmbodiment,
+    RoboticsVLMMode,
+    TrainingStage,
+    VideoCategory,
+    VisionCategory,
+    VLADatasetSpec,
+    VLASample,
+    VLAStage,
+    VLMSample,
+)
+from hale_vlm.data.vla_catalog import (
+    SMOLVLA_ALL_DATASETS,
+    SMOLVLA_COMMUNITY_DATASETS,
+    SMOLVLA_REAL_WORLD_DATASETS,
+    SMOLVLA_SIMULATION_DATASETS,
+    VLA_STAGE_PRESETS,
+)
+from hale_vlm.data.vla_registry import (
+    VLA_DATASETS,
+    build_vla_dataset,
+    get_vla_dataset,
+    list_vla_datasets,
+    register_vla_dataset,
+)
+
+__all__ = [
+    "DATASETS",
+    "DatasetSpec",
+    "Modality",
+    "RoboticsVLMMode",
+    "RobotEmbodiment",
+    "SMOLVLM_ALL_DATASETS",
+    "SMOLVLM_CONTEXT_DATASETS",
+    "SMOLVLM_REJECTED_DATASETS",
+    "SMOLVLM_VIDEO_DATASETS",
+    "SMOLVLM_VISION_DATASETS",
+    "SMOLVLA_ALL_DATASETS",
+    "SMOLVLA_COMMUNITY_DATASETS",
+    "SMOLVLA_REAL_WORLD_DATASETS",
+    "SMOLVLA_SIMULATION_DATASETS",
+    "STAGE_PRESETS",
+    "SequentialMixConfig",
+    "SequentialMultiDatasetStream",
+    "TrainingStage",
+    "VLA_DATASETS",
+    "VLADatasetSpec",
+    "VLASample",
+    "VLMSample",
+    "VLAStage",
+    "VLA_STAGE_PRESETS",
+    "VIDEO_CATEGORY_NOTES",
+    "VISION_CATEGORY_NOTES",
+    "VideoCategory",
+    "VisionCategory",
+    "build_dataset",
+    "build_vla_dataset",
+    "get_dataset",
+    "get_vla_dataset",
+    "list_datasets",
+    "list_vla_datasets",
+    "register_dataset",
+    "register_vla_dataset",
+]

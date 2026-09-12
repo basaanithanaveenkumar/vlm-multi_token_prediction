@@ -1,0 +1,7 @@
+inherits: base.yaml
+data:
+  source: registry
+  registry_stage: all
+  streaming: true
+  prefetch_workers: 2
+  max_samples_per_dataset: 128

@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 
-from models.positional_embeddings import SinusoidalPositionalEmbedding
-from models.vision_encoder import VisionEncoder
-from models.open_clipencoder import OpenCLIPEncoder
-from models.image_proj import ImageProjector
-from models.lm_head import LMHead
+from halo_vlm.models.image_proj import ImageProjector
+from halo_vlm.models.lm_head import LMHead
+from halo_vlm.models.open_clipencoder import OpenCLIPEncoder
+from halo_vlm.models.positional_embeddings import SinusoidalPositionalEmbedding
 
 
 class BasicVLM(nn.Module):

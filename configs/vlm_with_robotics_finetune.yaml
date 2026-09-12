@@ -1,0 +1,6 @@
+inherits: smolvlm_vision.yaml
+data:
+  source: registry
+  robotics_vlm_mode: finetuning
+  vla_registry_stage: real_world
+  max_samples_per_dataset: 32

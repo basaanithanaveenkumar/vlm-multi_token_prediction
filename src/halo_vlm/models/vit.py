@@ -1,6 +1,12 @@
 from torch import nn
 import torch
-from models.transformer import SelfAttn, HeadAttn , MultiHeadAttn,  DecoderTransformer, TransformerBlock
+from halo_vlm.models.transformer import (
+    DecoderTransformer,
+    HeadAttn,
+    MultiHeadAttn,
+    SelfAttn,
+    TransformerBlock,
+)
 class PatchEmb(nn.Module):
     def __init__(self, img_size=224, p_size=16, in_chans=3, emb_dim=1024):
         super().__init__()
